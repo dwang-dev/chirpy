@@ -5,6 +5,7 @@ export const users = pgTable("users", {
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
     email: varchar("email", { length: 256 }).unique().notNull(),
+    password: varchar("password", {length: 256}).notNull().default("unset"),
 });
 export type NewUser = typeof users.$inferInsert;
 

@@ -1,7 +1,7 @@
 import express, { NextFunction } from "express";
 import { Request, Response } from "express";
 import { BadReqError, UnauthorizedError, ForbiddenError, NotFoundError, CustomError } from "./errors.js";
-import { insertUser, deleteAllUsers, insertChirp, selectAllChirps } from "./db/queries.js";
+import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp } from "./db/queries.js";
 import { config } from "./config.js";
 
 const PROFANITIES = ["kerfuffle", "sharbert", "fornax"];
@@ -16,6 +16,7 @@ app.get("/api/healthz", handlerReadiness);
 app.post("/api/users", handlerCreateUser);
 app.post("/api/chirps", handlerCreateChirp);
 app.get("/api/chirps", getAllChirps);
+app.get("/api/chirps/:chirpId", getChirp);
 app.use(handlerErrors);
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
@@ -62,7 +63,7 @@ async function handlerReset(request: Request, response: Response): Promise<void>
         response.status(200);
         await deleteAllUsers();
     } else {
-        response.status(403);
+        throw new ForbiddenError("Forbidden: Not a developer.")
     }
     response.send();    
 }
@@ -101,3 +102,16 @@ async function getAllChirps(request: Request, response: Response) {
     const chirps = await selectAllChirps();
     response.status(200).send(chirps);
 };
+
+async function getChirp(request: Request, response: Response) {
+    const chirpId = request.params.chirpId;
+    if (typeof chirpId !== "string") {
+        throw new BadReqError(`Invalid Chirp ID: ${chirpId}`);
+    }
+    const chirp = await selectChirp(request.params.chirpId as string);
+    if (!chirp) {
+        throw new NotFoundError(`Chirp with id ${chirpId}`)
+    } else {
+        response.status(200).send(chirp); 
+    }
+}

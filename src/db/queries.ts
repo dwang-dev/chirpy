@@ -1,5 +1,6 @@
 import { db } from "./index.js";
 import { Chirp, chirps, NewUser, users } from "./schema.js";
+import { eq } from "drizzle-orm";
 
 /* User table queries. */
 export async function insertUser(user: NewUser) {
@@ -25,6 +26,15 @@ export async function insertChirp(chirp: Chirp) {
     return result;
 }
 
+export async function selectChirp(chirpId: string) {
+    console.log(chirpId);
+    const [result] = await db
+        .select()
+        .from(chirps)
+        .where(eq(chirps.id, chirpId));
+    return result;
+}
+
 export async function selectAllChirps() {
-    return db.select().from(chirps);
+    return await db.select().from(chirps);
 }

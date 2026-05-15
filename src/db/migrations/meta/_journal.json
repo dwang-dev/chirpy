@@ -15,6 +15,13 @@
       "when": 1778856115205,
       "tag": "0001_soft_fat_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778863714684,
+      "tag": "0002_material_stryfe",
+      "breakpoints": true
     }
   ]
 }

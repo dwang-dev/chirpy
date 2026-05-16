@@ -1,5 +1,5 @@
 import { db } from "./index.js";
-import { Chirp, chirps, NewUser, users } from "./schema.js";
+import { Chirp, chirps, NewUser, RefreshToken, refreshTokens, users } from "./schema.js";
 import { eq } from "drizzle-orm";
 
 /* User table queries. */
@@ -41,4 +41,31 @@ export async function selectChirp(chirpId: string) {
 
 export async function selectAllChirps() {
     return await db.select().from(chirps);
+}
+
+/* Refresh token queries. */
+export async function selectRefreshToken(refreshToken: string) {
+    const [result] = await db
+        .select()
+        .from(refreshTokens)
+        .where((eq(refreshTokens.token, refreshToken)));
+    return result;
+}
+
+export async function updateRefreshToken(token: RefreshToken) {
+    const [result] = await db
+        .update(refreshTokens)
+        .set(token)
+        .where(eq(refreshTokens.userId, token.userId))
+        .returning();
+    return result;
+}
+
+export async function insertRefreshToken(refreshToken: RefreshToken) {
+    const [result] = await db
+        .insert(refreshTokens)
+        .values(refreshToken)
+        .onConflictDoNothing()
+        .returning();
+    return result;
 }

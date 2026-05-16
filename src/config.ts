@@ -6,12 +6,13 @@ import { MigrationConfig } from "drizzle-orm/migrator";
 type Config = {
     api: APIConfig;
     db: DBConfig;
-    JWT_SECRET: string
 };
 
 type APIConfig = {
     fileserverHits: number;
     port: number
+    jwt_secret: string,
+    jwt_timeout: number
 };
 
 type DBConfig = {
@@ -25,7 +26,9 @@ if (!process.env.JWT_SECRET) throw new Error("Invalid or missing JWT_SECRET envi
 export const config: Config = {
     api: {
         fileserverHits: 0, 
-        port: 8080
+        port: 8080,
+        jwt_secret: process.env.JWT_SECRET,
+        jwt_timeout: 3600
     },
     db: {
         url: process.env.DB_URL, 
@@ -33,7 +36,7 @@ export const config: Config = {
             migrationsFolder: "./src/db/migrations",
         }
     },
-    JWT_SECRET: process.env.JWT_SECRET
+    
 };
 
 const migrationClient = postgres(config.db.url, {max: 1});

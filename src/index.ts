@@ -1,9 +1,9 @@
 import express, { NextFunction } from "express";
 import { Request, Response } from "express";
 import { BadReqError, UnauthorizedError, ForbiddenError, NotFoundError, CustomError } from "./errors.js";
-import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp, selectUserByEmail } from "./db/queries.js";
+import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp, selectUserByEmail, selectRefreshToken, updateRefreshToken, insertRefreshToken } from "./db/queries.js";
 import { config } from "./config.js";
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 
 const PROFANITIES = ["kerfuffle", "sharbert", "fornax"];
 
@@ -19,6 +19,8 @@ app.post("/api/chirps", handlerCreateChirp);
 app.get("/api/chirps", getAllChirps);
 app.get("/api/chirps/:chirpId", getChirp);
 app.post("/api/login", handlerLogin);
+app.post("/api/refresh", handlerRefresh);
+app.post("/api/revoke", handlerRevoke);
 app.use(handlerErrors);
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
@@ -80,7 +82,8 @@ function handlerErrors(error: any, request: Request, response: Response, next: N
 }
 
 async function handlerCreateUser(request: Request, response: Response): Promise<void> {
-    const newUser = await insertUser({email: request.body.email, 
+    const newUser = await insertUser({
+        email: request.body.email, 
         password: await hashPassword(request.body.password)
     });
     response.status(201);
@@ -90,7 +93,7 @@ async function handlerCreateUser(request: Request, response: Response): Promise<
 async function handlerCreateChirp(request: Request, response: Response): Promise<void> {
     const requestBody = request.body;
     const jwt = getBearerToken(request);
-    const userId = validateJWT(jwt, config.JWT_SECRET);
+    const userId = validateJWT(jwt, config.api.jwt_secret);
     if (requestBody.body.length > 140) {
         throw new BadReqError("Chirp is too long. Max length is 140");
     }
@@ -134,6 +137,45 @@ async function handlerLogin(request: Request, response: Response) {
     if (!(await checkPasswordHash(user.password, request.body.password))) {
         throw new UnauthorizedError(`Could not authenticate user`);
     }
-    const jwt = makeJWT(user.id, request.body.expiresInSeconds || 3600, config.JWT_SECRET);
-    response.status(200).send({...user, token: jwt});
+    const jwt = makeJWT(user.id, config.api.jwt_timeout, config.api.jwt_secret);
+    const refreshToken = makeRefreshToken();
+    const refreshTokenObj = await insertRefreshToken({
+        userId: user.id,
+        token: refreshToken
+    });
+    if (!refreshTokenObj) {
+        throw new Error("could not save refresh token");
+    }
+    response.status(200).send({
+        ...user, 
+        token: jwt, 
+        refreshToken: refreshToken
+    });
+}
+
+async function handlerRefresh(request: Request, response: Response) {
+    const oldTokenStr = getBearerToken(request);
+    const tokenObj = await selectRefreshToken(oldTokenStr);
+    if (!tokenObj || tokenObj.revokedAt !== null) {
+        throw new UnauthorizedError(`Invalid refresh token ${oldTokenStr}`);
+    }
+    const newAccessToken = makeJWT(tokenObj.userId, config.api.jwt_timeout, config.api.jwt_secret);
+    response.status(200).send({
+        token: newAccessToken
+    });
+}
+
+async function handlerRevoke(request: Request, response: Response) {
+    const oldTokenStr = getBearerToken(request);
+    const tokenObj = await selectRefreshToken(oldTokenStr);
+    if (!tokenObj) {
+        throw new UnauthorizedError(`Invalid refresh token ${oldTokenStr}`);
+    }
+    const updatedTokenObj = await updateRefreshToken({
+        token: oldTokenStr,
+        userId: tokenObj.userId,
+        updatedAt: new Date(),
+        revokedAt: new Date(),
+    });
+    response.status(204).send();
 }

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import type { JwtPayload } from "jsonwebtoken";
 import { UnauthorizedError } from "./errors.js";
 import { Request, Response } from "express"
+import crypto from "node:crypto";
 
 type Payload = Pick<JwtPayload, "iss" | "sub" | "iat" | "exp">;
 
@@ -50,4 +51,8 @@ export function getBearerToken(request: Request): string {
         throw new UnauthorizedError("No authorization header. No token provided");
     } 
     return authorizationHeader.split(" ")[1];
+}
+
+export function makeRefreshToken() {
+    return crypto.randomBytes(32).toString("hex");
 }

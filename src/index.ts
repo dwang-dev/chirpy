@@ -1,8 +1,9 @@
 import express, { NextFunction } from "express";
 import { Request, Response } from "express";
 import { BadReqError, UnauthorizedError, ForbiddenError, NotFoundError, CustomError } from "./errors.js";
-import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp } from "./db/queries.js";
+import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp, selectUserByEmail } from "./db/queries.js";
 import { config } from "./config.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
 
 const PROFANITIES = ["kerfuffle", "sharbert", "fornax"];
 
@@ -17,6 +18,7 @@ app.post("/api/users", handlerCreateUser);
 app.post("/api/chirps", handlerCreateChirp);
 app.get("/api/chirps", getAllChirps);
 app.get("/api/chirps/:chirpId", getChirp);
+app.post("/api/login", handlerLogin);
 app.use(handlerErrors);
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
@@ -68,20 +70,27 @@ async function handlerReset(request: Request, response: Response): Promise<void>
     response.send();    
 }
 
-function handlerErrors(error: any, request: Request, response: Response): void {
-    error instanceof CustomError ? response.status(error.getStatus()) : response.status(500);
+function handlerErrors(error: any, request: Request, response: Response, next: NextFunction): void {
+    if (error instanceof CustomError) {
+        response.status(error.getStatus())
+    } else {
+        response.status(500);
+    }
     response.send({"error": error.message});
 }
 
 async function handlerCreateUser(request: Request, response: Response): Promise<void> {
-    const newUser = await insertUser({email: request.body.email});
+    const newUser = await insertUser({email: request.body.email, 
+        password: await hashPassword(request.body.password)
+    });
     response.status(201);
     response.send(newUser);
 }
 
 async function handlerCreateChirp(request: Request, response: Response): Promise<void> {
     const requestBody = request.body;
-    response.header("Content-Type", "application/json");
+    const jwt = getBearerToken(request);
+    const userId = validateJWT(jwt, config.JWT_SECRET);
     if (requestBody.body.length > 140) {
         throw new BadReqError("Chirp is too long. Max length is 140");
     }
@@ -92,8 +101,9 @@ async function handlerCreateChirp(request: Request, response: Response): Promise
     const cleanedBody = cleanedWords.join(" ");
     const chirp = await insertChirp({
         body: cleanedBody, 
-        userId: request.body.userId
+        userId: userId
     });
+    response.header("Content-Type", "application/json");
     response.status(201);
     response.send(chirp);
 }
@@ -114,4 +124,16 @@ async function getChirp(request: Request, response: Response) {
     } else {
         response.status(200).send(chirp); 
     }
+}
+
+async function handlerLogin(request: Request, response: Response) {
+    const user = await selectUserByEmail(request.body.email);
+    if (!user) {
+        throw new UnauthorizedError(`Could not authenticate user`);
+    }
+    if (!(await checkPasswordHash(user.password, request.body.password))) {
+        throw new UnauthorizedError(`Could not authenticate user`);
+    }
+    const jwt = makeJWT(user.id, request.body.expiresInSeconds || 3600, config.JWT_SECRET);
+    response.status(200).send({...user, token: jwt});
 }

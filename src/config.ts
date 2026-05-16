@@ -4,8 +4,9 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import { MigrationConfig } from "drizzle-orm/migrator";
 
 type Config = {
-  api: APIConfig;
-  db: DBConfig;
+    api: APIConfig;
+    db: DBConfig;
+    JWT_SECRET: string
 };
 
 type APIConfig = {
@@ -19,7 +20,8 @@ type DBConfig = {
 }
 
 process.loadEnvFile();
-if (!process.env.DB_URL) throw new Error("Invalid database URL.");
+if (!process.env.DB_URL) throw new Error("Invalid or missing DB_URL (database URL) environment variable.");
+if (!process.env.JWT_SECRET) throw new Error("Invalid or missing JWT_SECRET environment variable.")
 export const config: Config = {
     api: {
         fileserverHits: 0, 
@@ -30,7 +32,8 @@ export const config: Config = {
         migrationConfig: {
             migrationsFolder: "./src/db/migrations",
         }
-    }
+    },
+    JWT_SECRET: process.env.JWT_SECRET
 };
 
 const migrationClient = postgres(config.db.url, {max: 1});

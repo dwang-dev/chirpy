@@ -16,6 +16,11 @@ export async function deleteAllUsers() {
     await db.delete(users);
 }
 
+export async function selectUserByEmail(email: string) {
+    const [result] = await db.select().from(users).where(eq(users.email, email));
+    return result;
+}
+
 /* Chirps table queries. */
 export async function insertChirp(chirp: Chirp) {
     const [result] = await db
@@ -27,7 +32,6 @@ export async function insertChirp(chirp: Chirp) {
 }
 
 export async function selectChirp(chirpId: string) {
-    console.log(chirpId);
     const [result] = await db
         .select()
         .from(chirps)

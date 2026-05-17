@@ -48,3 +48,4 @@ export class NotFoundError extends CustomError {
         return NotFoundError.status;
     }
 }
+

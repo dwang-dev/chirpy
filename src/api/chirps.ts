@@ -28,7 +28,18 @@ export async function handlerCreateChirp(request: Request, response: Response): 
 }
 
 export async function getAllChirps(request: Request, response: Response) {
-    const chirps = await selectAllChirps();
+    let authorId;
+    if (typeof request.query.authorId === "string") {
+        authorId = request.query.authorId;
+    }
+    const chirps = await selectAllChirps(authorId);
+    chirps.sort((c1, c2) => {
+        if (request.query.sort === "asc") {
+            return c1.createdAt.getTime() - c2.createdAt.getTime();
+        } else {
+            return c2.createdAt.getTime() - c1.createdAt.getTime();
+        }
+    });
     response.status(200).send(chirps);
 };
 

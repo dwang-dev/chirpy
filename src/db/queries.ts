@@ -1,6 +1,6 @@
 import { db } from "./index.js";
 import { Chirp, chirps, User, RefreshToken, refreshTokens, users } from "./schema.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 /* User table queries. */
 export async function insertUser(user: User) {
@@ -65,8 +65,12 @@ export async function selectChirpByUserId(chirpId: string, userId: string) {
     return result;
 }
 
-export async function selectAllChirps() {
-    return await db.select().from(chirps);
+export async function selectAllChirps(userId: string | undefined) {
+    if (!userId) {
+        return await db.select().from(chirps);
+    } else {
+        return await db.select().from(chirps).where(eq(chirps.userId, userId));
+    }
 }
 
 export async function deleteChirp(chirpId: string) {

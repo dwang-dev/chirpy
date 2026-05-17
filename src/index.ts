@@ -1,7 +1,7 @@
 import express, { NextFunction } from "express";
 import { Request, Response } from "express";
 import { BadReqError, UnauthorizedError, ForbiddenError, NotFoundError, CustomError } from "./errors.js";
-import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp, selectUserByEmail, selectRefreshToken, updateRefreshToken, insertRefreshToken } from "./db/queries.js";
+import { insertUser, deleteAllUsers, insertChirp, selectAllChirps, selectChirp, selectUserByEmail, selectRefreshToken, updateRefreshToken, insertRefreshToken, updateUser, deleteChirp, selectChirpByUserId, upgradeUserMembership } from "./db/queries.js";
 import { config } from "./config.js";
 import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 
@@ -9,19 +9,24 @@ const PROFANITIES = ["kerfuffle", "sharbert", "fornax"];
 
 const app = express();
 const PORT = 8080;
+
 app.use(middlewareLogResponses, express.json());
 app.use("/app", middlewareUpdateMetrics, express.static("./src/app"))
 app.get("/admin/metrics", handlerMetrics);
 app.post("/admin/reset", handlerReset);
 app.get("/api/healthz", handlerReadiness);
 app.post("/api/users", handlerCreateUser);
+app.put("/api/users", handlerUpdateUser);
 app.post("/api/chirps", handlerCreateChirp);
 app.get("/api/chirps", getAllChirps);
 app.get("/api/chirps/:chirpId", getChirp);
+app.delete("/api/chirps/:chirpId", handleDeleteChirp);
 app.post("/api/login", handlerLogin);
 app.post("/api/refresh", handlerRefresh);
 app.post("/api/revoke", handlerRevoke);
+app.post("/api/polka/webhooks", handlerPolkaWebhook);
 app.use(handlerErrors);
+
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
 });
@@ -86,8 +91,7 @@ async function handlerCreateUser(request: Request, response: Response): Promise<
         email: request.body.email, 
         password: await hashPassword(request.body.password)
     });
-    response.status(201);
-    response.send(newUser);
+    response.status(201).send(newUser);
 }
 
 async function handlerCreateChirp(request: Request, response: Response): Promise<void> {
@@ -127,6 +131,27 @@ async function getChirp(request: Request, response: Response) {
     } else {
         response.status(200).send(chirp); 
     }
+}
+
+async function handleDeleteChirp(request: Request, response: Response) {
+    const token = getBearerToken(request);
+    const userId = validateJWT(token, config.api.jwt_secret);
+    const chirpId = request.params.chirpId;
+    if (!userId) {
+        throw new UnauthorizedError("Invalid token.");
+    }
+    if (typeof chirpId !== "string") {
+        throw new BadReqError(`Invalid Chirp ID: ${chirpId}`);
+    }
+    const res = await selectChirpByUserId(chirpId, userId);
+    console.log(res);
+    if (!await selectChirpByUserId(chirpId, userId)) {
+        throw new ForbiddenError("Unauthorized to delete chirp");
+    }
+    if (!await deleteChirp(chirpId)) {
+        throw new NotFoundError(`Could not delete chirp with id ${chirpId}`);
+    }
+    response.status(204).send();
 }
 
 async function handlerLogin(request: Request, response: Response) {
@@ -178,4 +203,31 @@ async function handlerRevoke(request: Request, response: Response) {
         revokedAt: new Date(),
     });
     response.status(204).send();
+}
+
+async function handlerUpdateUser(request: Request, response: Response) {
+    const email = request.body.email;
+    const password = request.body.password;
+    if (!email || !password) throw new BadReqError("Missing required fields");
+    const token = getBearerToken(request);
+    const userId = validateJWT(token, config.api.jwt_secret);
+    const passwordHash = await hashPassword(request.body.password);
+    const updatedDetails = {
+        email: request.body.email,
+        password: passwordHash
+    }
+    const user = await updateUser(updatedDetails, userId);
+    response.status(200).send(updatedDetails);
+}
+
+async function handlerPolkaWebhook(request: Request, response: Response) {
+    if (request.body.event !== "user.upgraded") {
+        response.status(204).send();
+        return;
+    }
+    const user = await upgradeUserMembership(request.body.data.userId);
+    if (!user) {
+        throw new NotFoundError(`User not found.`);
+    }
+    response.status(204).send({});
 }

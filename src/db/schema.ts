@@ -1,6 +1,6 @@
-import { pgTable, timestamp, varchar, uuid } from "drizzle-orm/pg-core";
+import { pgTable, timestamp, varchar, uuid, boolean } from "drizzle-orm/pg-core";
 
-export type NewUser = typeof users.$inferInsert;
+export type User = typeof users.$inferInsert;
 export type Chirp = typeof chirps.$inferInsert;
 export type RefreshToken = typeof refreshTokens.$inferInsert;
 
@@ -10,6 +10,7 @@ export const users = pgTable("users", {
     updatedAt: timestamp("updated_at").notNull().defaultNow().$onUpdate(() => new Date()),
     email: varchar("email", { length: 256 }).unique().notNull(),
     password: varchar("password", {length: 256}).notNull().default("unset"),
+    isChirpyRed: boolean("is_chirpy_red").notNull().default(false),
 });
 
 export const chirps = pgTable("chirps", {

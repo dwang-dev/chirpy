@@ -1,9 +1,9 @@
 import { db } from "./index.js";
-import { Chirp, chirps, NewUser, RefreshToken, refreshTokens, users } from "./schema.js";
-import { eq } from "drizzle-orm";
+import { Chirp, chirps, User, RefreshToken, refreshTokens, users } from "./schema.js";
+import { and, eq } from "drizzle-orm";
 
 /* User table queries. */
-export async function insertUser(user: NewUser) {
+export async function insertUser(user: User) {
     const [result] = await db
         .insert(users)
         .values(user)
@@ -18,6 +18,24 @@ export async function deleteAllUsers() {
 
 export async function selectUserByEmail(email: string) {
     const [result] = await db.select().from(users).where(eq(users.email, email));
+    return result;
+}
+
+export async function updateUser(user: User, userId: string) {
+    const [result] = await db
+        .update(users)
+        .set(user)
+        .where(eq(users.id, userId))
+        .returning();
+    return result;
+}
+
+export async function upgradeUserMembership(userId: string) {
+    const [result] = await db
+        .update(users)
+        .set({isChirpyRed: true})
+        .where(eq(users.id, userId))
+        .returning();
     return result;
 }
 
@@ -39,8 +57,24 @@ export async function selectChirp(chirpId: string) {
     return result;
 }
 
+export async function selectChirpByUserId(chirpId: string, userId: string) {
+    const [result] = await db
+        .select()
+        .from(chirps)
+        .where(and(eq(chirps.id, chirpId), eq(chirps.userId, userId)));
+    return result;
+}
+
 export async function selectAllChirps() {
     return await db.select().from(chirps);
+}
+
+export async function deleteChirp(chirpId: string) {
+    const [result] = await db
+        .delete(chirps)
+        .where(eq(chirps.id, chirpId))
+        .returning();
+    return result;
 }
 
 /* Refresh token queries. */
